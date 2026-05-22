@@ -317,11 +317,23 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
     numeric = [v for v in values if v is not None and not pd.isna(v)]
     fig = go.Figure()
 
-    # Başlığı 2 satıra böl (Plotly için <br> kullan)
+    # HİYERARŞİK BAŞLIK
+    # ÜST: program adı (büyük, kalın, koyu)
+    # ALT: "Başarı Sırası" (küçük, kalın, gri)
     wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28).replace("\n", "<br>")
     title_has_two_lines = "<br>" in wrapped_title
-    # 2 satır başlık varsa üst margin biraz daha
-    top_margin = 95 if title_has_two_lines else 70
+
+    # HTML başlık: program adı + br + alt başlık
+    title_html = (
+        f"<span style='font-size:18px; color:{COLOR_TEXT}; font-weight:700;'>"
+        f"{wrapped_title}</span>"
+        f"<br>"
+        f"<span style='font-size:12px; color:{COLOR_AXIS_LABEL}; font-weight:700;'>"
+        f"Başarı Sırası</span>"
+    )
+
+    # Üst margin: program adı + alt başlık için yer
+    top_margin = 115 if title_has_two_lines else 90
 
     if not numeric:
         fig.add_annotation(
@@ -330,8 +342,8 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
             showarrow=False, font=dict(size=16, color=COLOR_AXIS_LABEL),
         )
         fig.update_layout(
-            title=dict(text=f"<b>{wrapped_title}</b>", x=0.02, y=0.96,
-                       font=dict(family="Inter, sans-serif", size=18, color=COLOR_TEXT)),
+            title=dict(text=title_html, x=0.02, y=0.96,
+                       font=dict(family="Inter, sans-serif", color=COLOR_TEXT)),
             height=height, margin=dict(l=80, r=50, t=top_margin, b=60),
             plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG, showlegend=False,
         )
@@ -356,8 +368,8 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
 
     fig.update_layout(
         title=dict(
-            text=f"<b>{wrapped_title}</b>", x=0.02, y=0.96,
-            font=dict(family="Inter, sans-serif", size=18, color=COLOR_TEXT),
+            text=title_html, x=0.02, y=0.96,
+            font=dict(family="Inter, sans-serif", color=COLOR_TEXT),
         ),
         height=height,
         margin=dict(l=80, r=50, t=top_margin, b=60),
@@ -486,14 +498,17 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     ax.spines["bottom"].set_color(COLOR_BASELINE)
     ax.spines["bottom"].set_linewidth(2)
 
-    # BAŞLIK - 2 satıra bölünmüş, uzunluğa göre fontu otomatik ayarla
+    # ===========================================================
+    # BAŞLIK - HİYERARŞİK 2 PARÇA
+    # ÜST: Program adı (büyük, kalın, koyu) — asıl vurgu
+    # ALT: "Başarı Sırası" (küçük, kalın, gri) — alt başlık
+    # ===========================================================
     wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28)
     title_lines_list = wrapped_title.split("\n")
     title_lines = len(title_lines_list)
     longest_line = max(len(l) for l in title_lines_list)
 
-    # Font boyutu: en uzun satır 28'i aştıkça (kelime sığmadığı için aşmış olabilir)
-    # küçülsün — böylece taşma garantili önlenir.
+    # Font boyutu: en uzun satır 28'i aştıkça küçülsün → taşmayı önler
     if longest_line <= 28:
         title_fs = 19
     elif longest_line <= 33:
@@ -501,11 +516,33 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     else:
         title_fs = 15
 
-    title_pad = 22 if title_lines == 1 else 14
-    ax.set_title(wrapped_title, fontsize=title_fs, fontweight="bold", color=COLOR_TEXT,
-                 loc="left", pad=title_pad)
+    # Program adı: KALIN, KOYU, BÜYÜK — set_title ile, tight_layout uyumlu
+    # pad: alt başlığa yer açmak için artırılmış
+    # 1 satır program → 32 px (alt başlık için yeterli)
+    # 2 satır program → 32 px (aynı pad, ama y_sub konumunu farklılaştıracağız)
+    title_pad = 32
+    ax.set_title(wrapped_title, fontsize=title_fs, fontweight="bold",
+                 color=COLOR_TEXT, loc="left", pad=title_pad)
 
+    # Alt başlık konumu (ax üst kenarın üstünde, program adının altında):
+    # 1 satır program → y=1.015 (set_title 1 satır kullanır, az boşluk yeter)
+    # 2 satır program → y=1.015 ama 2 satır olduğu için set_title daha fazla yer kaplar
+    #                   set_title'ın pad=32 ile bıraktığı boşluğa alt başlık girer
+    # Aslında en doğrusu: y koordinatını ax pixel uzunluğundan bağımsız sabit tut
+    y_sub = 1.015
+    ax.text(0.0, y_sub, "Başarı Sırası",
+            transform=ax.transAxes,
+            fontsize=12, fontweight="bold",
+            color=COLOR_AXIS_LABEL,
+            ha="left", va="bottom")
+
+    # 2 satır program adı varsa: set_title'ın pad'i alt başlığa yetmeyebilir;
+    # üst marjı manuel açıyoruz (tight_layout sonrası override)
     plt.tight_layout()
+    if title_lines == 2:
+        # Üst marjı %4 düşür (daha fazla yer aç)
+        fig.subplots_adjust(top=fig.subplotpars.top - 0.04)
+
     buf = io.BytesIO()
     plt.savefig(buf, format="png", facecolor=COLOR_BG, edgecolor="none", dpi=dpi)
     plt.close(fig)
@@ -600,7 +637,7 @@ def render_metric_panel_png(school: str, program: str,
 def export_program_png(school: str, program: str,
                        years: List[str], values: List[Optional[float]]) -> bytes:
     """Tüm bölüm tek PNG: logo + başlık + grafik + metrik panel."""
-    chart = render_chart_png(years, values, "Başarı Sırası")
+    chart = render_chart_png(years, values, program)
     metric = render_metric_panel_png(school, program, values, height=chart.height)
 
     body_w = chart.width + metric.width
@@ -809,7 +846,7 @@ if mode == "Tek Program":
 
     col_chart, col_stats = st.columns([2.2, 1], gap="large")
     with col_chart:
-        fig = build_chart(YEAR_COLUMNS, values, "Başarı Sırası", height=560)
+        fig = build_chart(YEAR_COLUMNS, values, selected_program, height=560)
         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
     with col_stats:
         render_metric_panel(selected_school, selected_program, values)
@@ -830,7 +867,7 @@ elif mode == "Okul Bazlı Toplu Görünüm":
         col_chart, col_stats = st.columns([2.2, 1], gap="large")
         with col_chart:
             fig = build_chart(YEAR_COLUMNS, values,
-                              "Başarı Sırası", height=440)
+                              row['PROGRAM ADI'], height=440)
             st.plotly_chart(fig, use_container_width=True,
                             key=f"ch_{idx}", config=PLOTLY_CONFIG)
         with col_stats:
