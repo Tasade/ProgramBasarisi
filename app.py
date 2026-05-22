@@ -314,26 +314,30 @@ def compute_fixed_y_ticks(values: List[Optional[float]], n_ticks: int = 6) -> tu
 # 7. PLOTLY GRAFİK (Streamlit ekranı için)
 # =============================================================================
 def build_chart(years: List[str], values: List[Optional[float]], title: str, height: int = 500) -> go.Figure:
+    """
+    title = SADECE program adı (örn. "Tıbbi ve Aromatik Bitkiler")
+    Başlık iki parça çizilir:
+      ÜST: program adı  → büyük, kalın, koyu
+      ALT: "Başarı Sırası" → küçük, kalın, gri
+    """
     numeric = [v for v in values if v is not None and not pd.isna(v)]
     fig = go.Figure()
 
-    # HİYERARŞİK BAŞLIK
-    # ÜST: program adı (büyük, kalın, koyu)
-    # ALT: "Başarı Sırası" (küçük, kalın, gri)
-    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28).replace("\n", "<br>")
-    title_has_two_lines = "<br>" in wrapped_title
+    # Program adını dengeli olarak 2 satıra böl (gerekirse)
+    wrapped_program = wrap_title_two_lines(title, max_chars_per_line=28).replace("\n", "<br>")
+    program_has_two_lines = "<br>" in wrapped_program
 
-    # HTML başlık: program adı + br + alt başlık
+    # HTML başlık: üstte vurgulu program adı + altında soluk alt başlık
     title_html = (
         f"<span style='font-size:18px; color:{COLOR_TEXT}; font-weight:700;'>"
-        f"{wrapped_title}</span>"
+        f"{wrapped_program}</span>"
         f"<br>"
         f"<span style='font-size:12px; color:{COLOR_AXIS_LABEL}; font-weight:700;'>"
         f"Başarı Sırası</span>"
     )
 
-    # Üst margin: program adı + alt başlık için yer
-    top_margin = 115 if title_has_two_lines else 90
+    # Üst margin: program adı 1 satır + alt başlık → ~90; 2 satır + alt başlık → ~115
+    top_margin = 115 if program_has_two_lines else 90
 
     if not numeric:
         fig.add_annotation(
@@ -500,47 +504,39 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
 
     # ===========================================================
     # BAŞLIK - HİYERARŞİK 2 PARÇA
-    # ÜST: Program adı (büyük, kalın, koyu) — asıl vurgu
-    # ALT: "Başarı Sırası" (küçük, kalın, gri) — alt başlık
+    # ÜST: program adı (büyük, kalın, koyu)
+    # ALT: "Başarı Sırası" (küçük, kalın, gri)
     # ===========================================================
-    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28)
-    title_lines_list = wrapped_title.split("\n")
-    title_lines = len(title_lines_list)
-    longest_line = max(len(l) for l in title_lines_list)
+    wrapped_program = wrap_title_two_lines(title, max_chars_per_line=28)
+    program_lines = wrapped_program.split("\n")
+    program_line_count = len(program_lines)
+    longest = max(len(l) for l in program_lines)
 
-    # Font boyutu: en uzun satır 28'i aştıkça küçülsün → taşmayı önler
-    if longest_line <= 28:
-        title_fs = 19
-    elif longest_line <= 33:
-        title_fs = 17
+    # Font boyutu - taşmayı önler
+    if longest <= 28:
+        prog_fs = 19
+    elif longest <= 33:
+        prog_fs = 17
     else:
-        title_fs = 15
+        prog_fs = 15
 
-    # Program adı: KALIN, KOYU, BÜYÜK — set_title ile, tight_layout uyumlu
+    # Program adı: KALIN, KOYU, BÜYÜK - set_title ile
     # pad: alt başlığa yer açmak için artırılmış
-    # 1 satır program → 32 px (alt başlık için yeterli)
-    # 2 satır program → 32 px (aynı pad, ama y_sub konumunu farklılaştıracağız)
     title_pad = 32
-    ax.set_title(wrapped_title, fontsize=title_fs, fontweight="bold",
+    ax.set_title(wrapped_program, fontsize=prog_fs, fontweight="bold",
                  color=COLOR_TEXT, loc="left", pad=title_pad)
 
-    # Alt başlık konumu (ax üst kenarın üstünde, program adının altında):
-    # 1 satır program → y=1.015 (set_title 1 satır kullanır, az boşluk yeter)
-    # 2 satır program → y=1.015 ama 2 satır olduğu için set_title daha fazla yer kaplar
-    #                   set_title'ın pad=32 ile bıraktığı boşluğa alt başlık girer
-    # Aslında en doğrusu: y koordinatını ax pixel uzunluğundan bağımsız sabit tut
-    y_sub = 1.015
-    ax.text(0.0, y_sub, "Başarı Sırası",
+    # Alt başlık: "Başarı Sırası" - KALIN, GRİ, KÜÇÜK
+    # ax üst kenarının hemen üstüne (program adının altına, Y rakamlarının üstüne)
+    ax.text(0.0, 1.015, "Başarı Sırası",
             transform=ax.transAxes,
             fontsize=12, fontweight="bold",
             color=COLOR_AXIS_LABEL,
             ha="left", va="bottom")
 
-    # 2 satır program adı varsa: set_title'ın pad'i alt başlığa yetmeyebilir;
-    # üst marjı manuel açıyoruz (tight_layout sonrası override)
+    # tight_layout sonrası 2 satır program adı varsa üst marjı genişlet
     plt.tight_layout()
-    if title_lines == 2:
-        # Üst marjı %4 düşür (daha fazla yer aç)
+    if program_line_count == 2:
         fig.subplots_adjust(top=fig.subplotpars.top - 0.04)
 
     buf = io.BytesIO()
@@ -631,7 +627,7 @@ def render_metric_panel_png(school: str, program: str,
     if pct_text:
         d.text((cx + 30, y + ch - 42), pct_text, fill=COLOR_AXIS_LABEL, font=f_pct)
 
-    return img 
+    return img
 
 
 def export_program_png(school: str, program: str,
