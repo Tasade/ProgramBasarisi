@@ -337,7 +337,7 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
     )
 
     # Üst margin: program adı 1 satır + alt başlık → ~90; 2 satır + alt başlık → ~115
-    top_margin = 115 if program_has_two_lines else 90
+    top_margin = 145 if program_has_two_lines else 120
 
     if not numeric:
         fig.add_annotation(
@@ -346,7 +346,7 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
             showarrow=False, font=dict(size=16, color=COLOR_AXIS_LABEL),
         )
         fig.update_layout(
-            title=dict(text=title_html, x=0.02, y=0.96,
+            title=dict(text=title_html, x=0.02, y=0.985,
                        font=dict(family="Inter, sans-serif", color=COLOR_TEXT)),
             height=height, margin=dict(l=80, r=50, t=top_margin, b=60),
             plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG, showlegend=False,
@@ -365,6 +365,7 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
         marker=dict(size=18, color=COLOR_MARKER, line=dict(color="#FFFFFF", width=3)),
         text=labels,
         textposition="top center",
+        cliponaxis=False,
         textfont=dict(size=15, color=COLOR_TEXT, family="Inter, sans-serif"),
         hovertemplate="<b>%{x}</b><br>Başarı Sırası: %{text}<extra></extra>",
         connectgaps=False,
@@ -372,7 +373,7 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
 
     fig.update_layout(
         title=dict(
-            text=title_html, x=0.02, y=0.96,
+            text=title_html, x=0.02, y=0.985,
             font=dict(family="Inter, sans-serif", color=COLOR_TEXT),
         ),
         height=height,
@@ -381,7 +382,8 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, showline=False,
                    tickfont=dict(size=14, color=COLOR_AXIS_LABEL),
-                   tickmode="array", tickvals=years, ticktext=years),
+                   tickmode="array", tickvals=years, ticktext=[f"<br>{y}" for y in years],
+                   ticklabelposition="outside bottom"),
         # SABİT TICK MODU: 6 çizgi, ters çevrilmiş Y (yukarı = daha iyi sıra)
         yaxis=dict(showgrid=True, gridcolor=COLOR_GRID, griddash="dot",
                    zeroline=False, showline=False,
@@ -420,12 +422,15 @@ def build_comparison_chart(df: pd.DataFrame, school: str, height: int = 700) -> 
         title=dict(text=f"<b>{school} — Tüm Programlar Karşılaştırma</b>",
                    x=0.02, y=0.96, font=dict(size=17, color=COLOR_TEXT)),
         height=height,
-        margin=dict(l=80, r=30, t=70, b=160),
+        margin=dict(l=80, r=30, t=110, b=190),
         plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG,
         legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0,
                     font=dict(size=11, color=COLOR_TEXT)),
         xaxis=dict(showgrid=False, zeroline=False, showline=False,
-                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL)),
+                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL),
+                   ticktext=[f"<br>{y}" for y in YEAR_COLUMNS],
+                   tickvals=YEAR_COLUMNS,
+                   ticklabelposition="outside bottom"),
         yaxis=dict(showgrid=True, gridcolor=COLOR_GRID, griddash="dot",
                    zeroline=False, showline=False, autorange="reversed",
                    tickfont=dict(size=12, color=COLOR_AXIS_LABEL),
