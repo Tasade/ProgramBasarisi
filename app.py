@@ -194,30 +194,55 @@ def wrap_text(text: str, font, max_width: int) -> List[str]:
 # =============================================================================
 # 6.A BAŞLIK SARMA (2 satır - karakter sayısına göre)
 # =============================================================================
-def wrap_title_two_lines(title: str, max_chars_per_line: int = 38) -> str:
+def wrap_title_two_lines(title: str, max_chars_per_line: int = 28) -> str:
     """
-    Uzun başlığı en fazla 2 satıra böler.
-    - Kısa başlıklar tek satır kalır.
-    - Bölme noktası: max_chars_per_line yakınındaki BOŞLUK.
-    - Plotly için '<br>', matplotlib için '\\n' ile değiştirilebilir.
-    Dönüş: satırları '\\n' ile ayrılmış string (Plotly'da .replace('\\n','<br>') yap).
+    Uzun başlığı en fazla 2 satıra DENGELİ şekilde böler.
+    - Kısa başlıklar (≤28 krk) tek satır.
+    - Uzun başlıklarda: bölme noktası, ikinci satır 1. satırı geçmeyecek ŞEKİLDE
+      seçilir → iki satır görsel olarak dengeli durur.
+    - max_chars_per_line: her satırın YAKLAŞIK üst sınırı.
     """
-    if not title or len(title) <= max_chars_per_line:
+    if not title:
+        return title
+    title = " ".join(title.split())  # fazla boşlukları toparla
+
+    # Tek satıra sığıyorsa olduğu gibi
+    if len(title) <= max_chars_per_line:
         return title
 
     words = title.split()
-    line1, line2 = "", ""
-    for w in words:
-        candidate = (line1 + " " + w).strip()
-        if len(candidate) <= max_chars_per_line:
-            line1 = candidate
-        else:
-            line2 = (line2 + " " + w).strip()
-    # line1 boş kaldıysa (tek kelime çok uzun) ilk kelimeyi al
-    if not line1:
-        line1 = words[0]
-        line2 = " ".join(words[1:])
-    return f"{line1}\n{line2}" if line2 else line1
+    if len(words) == 1:
+        return title  # tek kelime ise bölemeyiz
+
+    # DENGELİ bölme: ortaya en yakın boşluğu bul.
+    # Önce her bölme noktasını dene, hedef: |len(line1) - len(line2)| minimum
+    # AMA hiçbir satır max_chars_per_line'ı 3'ten fazla aşmasın.
+    best = None  # (skor, line1, line2)
+    for i in range(1, len(words)):
+        l1 = " ".join(words[:i])
+        l2 = " ".join(words[i:])
+        # Her iki satır da tek başına makul uzunlukta olmalı
+        if len(l1) > max_chars_per_line + 3 or len(l2) > max_chars_per_line + 3:
+            continue
+        score = abs(len(l1) - len(l2))
+        if best is None or score < best[0]:
+            best = (score, l1, l2)
+
+    if best is None:
+        # Hiçbir denge noktası bulunamadıysa (çok uzun başlık): ilk geçişte böl
+        line1, line2 = "", ""
+        for w in words:
+            cand = (line1 + " " + w).strip()
+            if len(cand) <= max_chars_per_line:
+                line1 = cand
+            else:
+                line2 = (line2 + " " + w).strip()
+        if not line1:
+            line1 = words[0]
+            line2 = " ".join(words[1:])
+        return f"{line1}\n{line2}" if line2 else line1
+
+    return f"{best[1]}\n{best[2]}"
 
 
 # =============================================================================
@@ -293,7 +318,7 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
     fig = go.Figure()
 
     # Başlığı 2 satıra böl (Plotly için <br> kullan)
-    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=38).replace("\n", "<br>")
+    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28).replace("\n", "<br>")
     title_has_two_lines = "<br>" in wrapped_title
     # 2 satır başlık varsa üst margin biraz daha
     top_margin = 95 if title_has_two_lines else 70
@@ -461,11 +486,23 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     ax.spines["bottom"].set_color(COLOR_BASELINE)
     ax.spines["bottom"].set_linewidth(2)
 
-    # BAŞLIK - 2 satıra bölünmüş (\n matplotlib'de doğrudan çalışır)
-    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=38)
-    title_lines = wrapped_title.count("\n") + 1
+    # BAŞLIK - 2 satıra bölünmüş, uzunluğa göre fontu otomatik ayarla
+    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=28)
+    title_lines_list = wrapped_title.split("\n")
+    title_lines = len(title_lines_list)
+    longest_line = max(len(l) for l in title_lines_list)
+
+    # Font boyutu: en uzun satır 28'i aştıkça (kelime sığmadığı için aşmış olabilir)
+    # küçülsün — böylece taşma garantili önlenir.
+    if longest_line <= 28:
+        title_fs = 19
+    elif longest_line <= 33:
+        title_fs = 17
+    else:
+        title_fs = 15
+
     title_pad = 22 if title_lines == 1 else 14
-    ax.set_title(wrapped_title, fontsize=19, fontweight="bold", color=COLOR_TEXT,
+    ax.set_title(wrapped_title, fontsize=title_fs, fontweight="bold", color=COLOR_TEXT,
                  loc="left", pad=title_pad)
 
     plt.tight_layout()
