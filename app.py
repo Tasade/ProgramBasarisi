@@ -631,7 +631,7 @@ def render_metric_panel_png(school: str, program: str,
     if pct_text:
         d.text((cx + 30, y + ch - 42), pct_text, fill=COLOR_AXIS_LABEL, font=f_pct)
 
-    return img
+    return img 
 
 
 def export_program_png(school: str, program: str,
