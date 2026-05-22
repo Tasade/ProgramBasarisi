@@ -192,11 +192,111 @@ def wrap_text(text: str, font, max_width: int) -> List[str]:
 
 
 # =============================================================================
+# 6.A BAŞLIK SARMA (2 satır - karakter sayısına göre)
+# =============================================================================
+def wrap_title_two_lines(title: str, max_chars_per_line: int = 38) -> str:
+    """
+    Uzun başlığı en fazla 2 satıra böler.
+    - Kısa başlıklar tek satır kalır.
+    - Bölme noktası: max_chars_per_line yakınındaki BOŞLUK.
+    - Plotly için '<br>', matplotlib için '\\n' ile değiştirilebilir.
+    Dönüş: satırları '\\n' ile ayrılmış string (Plotly'da .replace('\\n','<br>') yap).
+    """
+    if not title or len(title) <= max_chars_per_line:
+        return title
+
+    words = title.split()
+    line1, line2 = "", ""
+    for w in words:
+        candidate = (line1 + " " + w).strip()
+        if len(candidate) <= max_chars_per_line:
+            line1 = candidate
+        else:
+            line2 = (line2 + " " + w).strip()
+    # line1 boş kaldıysa (tek kelime çok uzun) ilk kelimeyi al
+    if not line1:
+        line1 = words[0]
+        line2 = " ".join(words[1:])
+    return f"{line1}\n{line2}" if line2 else line1
+
+
+# =============================================================================
+# 6.B SABİT 6 YATAY ÇİZGİLİ Y EKSENİ HESAPLAMASI
+# =============================================================================
+def compute_fixed_y_ticks(values: List[Optional[float]], n_ticks: int = 6) -> tuple:
+    """
+    Veriye göre güzel-yuvarlak adımlı 6 tick döndürür (sabit sayıda).
+    - Her grafik kendi aralığında çizilir (ki değişim görülebilsin)
+    - AMA çizgi sayısı her grafikte SABİT (örn. 6)
+    - Adım yuvarlak sayıya snap'lenir (1k, 2k, 5k, 10k, 20k, 50k, ...)
+    Dönüş: (y_lo, y_hi, ticks_list)  -- y_lo > y_hi sıralama TERS değil; ters çevirme dış katmanda yapılır.
+    """
+    numeric = [v for v in values if v is not None and not pd.isna(v)]
+    if not numeric:
+        # Fallback - tipik bir aralık
+        ticks = [0, 200000, 400000, 600000, 800000, 1000000]
+        return ticks[0], ticks[-1], ticks
+
+    v_min, v_max = min(numeric), max(numeric)
+    if v_min == v_max:
+        # Tek değer: ±%10'luk bant
+        pad = max(v_max * 0.10, 1000)
+        v_min, v_max = v_min - pad, v_max + pad
+
+    raw_range = v_max - v_min
+    # n_ticks-1 aralık olacak (6 çizgi = 5 aralık)
+    raw_step = raw_range / (n_ticks - 1)
+
+    # Yuvarlak step'e snap (1, 2, 5 × 10^k ailesi)
+    import math
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    norm = raw_step / magnitude
+    if norm < 1.5:
+        nice = 1
+    elif norm < 3:
+        nice = 2
+    elif norm < 7:
+        nice = 5
+    else:
+        nice = 10
+    step = nice * magnitude
+
+    # Alt sınırı step'in katına yuvarla (aşağı), üst sınırı yukarı yuvarla
+    y_lo = math.floor(v_min / step) * step
+    y_hi = y_lo + step * (n_ticks - 1)
+
+    # Veri y_hi'yi aşıyorsa step'i bir tık büyüt
+    while y_hi < v_max:
+        # Sıradaki nice step'e geç
+        if nice == 1:
+            nice = 2
+        elif nice == 2:
+            nice = 5
+        elif nice == 5:
+            nice = 10
+        else:
+            magnitude *= 10
+            nice = 1
+        step = nice * magnitude
+        y_lo = math.floor(v_min / step) * step
+        y_hi = y_lo + step * (n_ticks - 1)
+
+    ticks = [y_lo + i * step for i in range(n_ticks)]
+    return y_lo, y_hi, ticks
+
+
+# =============================================================================
 # 7. PLOTLY GRAFİK (Streamlit ekranı için)
 # =============================================================================
 def build_chart(years: List[str], values: List[Optional[float]], title: str, height: int = 500) -> go.Figure:
     numeric = [v for v in values if v is not None and not pd.isna(v)]
     fig = go.Figure()
+
+    # Başlığı 2 satıra böl (Plotly için <br> kullan)
+    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=38).replace("\n", "<br>")
+    title_has_two_lines = "<br>" in wrapped_title
+    # 2 satır başlık varsa üst margin biraz daha
+    top_margin = 95 if title_has_two_lines else 70
 
     if not numeric:
         fig.add_annotation(
@@ -204,12 +304,16 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
             xref="paper", yref="paper", x=0.5, y=0.5,
             showarrow=False, font=dict(size=16, color=COLOR_AXIS_LABEL),
         )
+        fig.update_layout(
+            title=dict(text=f"<b>{wrapped_title}</b>", x=0.02, y=0.96,
+                       font=dict(family="Inter, sans-serif", size=18, color=COLOR_TEXT)),
+            height=height, margin=dict(l=80, r=50, t=top_margin, b=60),
+            plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG, showlegend=False,
+        )
         return fig
 
-    v_min, v_max = min(numeric), max(numeric)
-    v_range = v_max - v_min if v_max != v_min else max(v_max * 0.1, 100)
-    y_lo = v_min - v_range * 0.30
-    y_hi = v_max + v_range * 0.35
+    # SABİT 6 yatay çizgi
+    y_lo, y_hi, ticks = compute_fixed_y_ticks(values, n_ticks=6)
 
     labels = [fmt_tr(v) if v is not None and not pd.isna(v) else "" for v in values]
 
@@ -227,21 +331,25 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
 
     fig.update_layout(
         title=dict(
-            text=f"<b>{title}</b>", x=0.02, y=0.96,
+            text=f"<b>{wrapped_title}</b>", x=0.02, y=0.96,
             font=dict(family="Inter, sans-serif", size=18, color=COLOR_TEXT),
         ),
         height=height,
-        margin=dict(l=80, r=50, t=70, b=60),
+        margin=dict(l=80, r=50, t=top_margin, b=60),
         plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG,
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, showline=False,
                    tickfont=dict(size=14, color=COLOR_AXIS_LABEL),
                    tickmode="array", tickvals=years, ticktext=years),
+        # SABİT TICK MODU: 6 çizgi, ters çevrilmiş Y (yukarı = daha iyi sıra)
         yaxis=dict(showgrid=True, gridcolor=COLOR_GRID, griddash="dot",
                    zeroline=False, showline=False,
-                   autorange="reversed", range=[y_hi, y_lo],
-                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL),
-                   tickformat=",d", separatethousands=True),
+                   autorange=False,
+                   range=[y_hi, y_lo],  # ters
+                   tickmode="array",
+                   tickvals=ticks,
+                   ticktext=[fmt_tr(t) for t in ticks],
+                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL)),
     )
     return fig
 
@@ -291,7 +399,10 @@ def build_comparison_chart(df: pd.DataFrame, school: str, height: int = 700) -> 
 def render_chart_png(years: List[str], values: List[Optional[float]],
                      title: str, width_px: int = 1200, height_px: int = 860,
                      dpi: int = 170) -> Image.Image:
-    """Matplotlib ile grafiği Türkçe karakter destekli olarak çiz."""
+    """Matplotlib ile grafiği Türkçe karakter destekli olarak çiz.
+    - Başlık otomatik 2 satıra bölünür (sığmıyorsa).
+    - Y ekseninde SABİT 6 yatay çizgi (yuvarlak step).
+    """
     import matplotlib.font_manager as fm
 
     # matplotlib paketindeki DejaVu Sans'ı kullan
@@ -333,11 +444,12 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     ax.set_xticklabels(years, fontsize=15, color=COLOR_AXIS_LABEL)
     ax.set_xlim(-0.5, len(years) - 0.5)
 
+    # SABİT 6 yatay çizgi - veri varsa
     numeric = [v for v in y if v is not None]
     if numeric:
-        v_min, v_max = min(numeric), max(numeric)
-        v_range = v_max - v_min if v_max != v_min else max(v_max * 0.1, 100)
-        ax.set_ylim(v_max + v_range * 0.35, v_min - v_range * 0.30)  # ters
+        y_lo, y_hi, ticks = compute_fixed_y_ticks(values, n_ticks=6)
+        ax.set_ylim(y_hi, y_lo)  # ters (yukarı = daha iyi)
+        ax.set_yticks(ticks)
 
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(
         lambda v, p: f"{int(v):,}".replace(",", ".")))
@@ -348,8 +460,13 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
         ax.spines[s].set_visible(False)
     ax.spines["bottom"].set_color(COLOR_BASELINE)
     ax.spines["bottom"].set_linewidth(2)
-    ax.set_title(title, fontsize=19, fontweight="bold", color=COLOR_TEXT,
-                 loc="left", pad=22)
+
+    # BAŞLIK - 2 satıra bölünmüş (\n matplotlib'de doğrudan çalışır)
+    wrapped_title = wrap_title_two_lines(title, max_chars_per_line=38)
+    title_lines = wrapped_title.count("\n") + 1
+    title_pad = 22 if title_lines == 1 else 14
+    ax.set_title(wrapped_title, fontsize=19, fontweight="bold", color=COLOR_TEXT,
+                 loc="left", pad=title_pad)
 
     plt.tight_layout()
     buf = io.BytesIO()
