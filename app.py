@@ -600,7 +600,7 @@ def render_metric_panel_png(school: str, program: str,
 def export_program_png(school: str, program: str,
                        years: List[str], values: List[Optional[float]]) -> bytes:
     """Tüm bölüm tek PNG: logo + başlık + grafik + metrik panel."""
-    chart = render_chart_png(years, values, f"Başarı Sırası — {program}")
+    chart = render_chart_png(years, values, "Başarı Sırası")
     metric = render_metric_panel_png(school, program, values, height=chart.height)
 
     body_w = chart.width + metric.width
@@ -809,7 +809,7 @@ if mode == "Tek Program":
 
     col_chart, col_stats = st.columns([2.2, 1], gap="large")
     with col_chart:
-        fig = build_chart(YEAR_COLUMNS, values, f"Başarı Sırası — {selected_program}", height=560)
+        fig = build_chart(YEAR_COLUMNS, values, "Başarı Sırası", height=560)
         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
     with col_stats:
         render_metric_panel(selected_school, selected_program, values)
@@ -830,7 +830,7 @@ elif mode == "Okul Bazlı Toplu Görünüm":
         col_chart, col_stats = st.columns([2.2, 1], gap="large")
         with col_chart:
             fig = build_chart(YEAR_COLUMNS, values,
-                              f"Başarı Sırası — {row['PROGRAM ADI']}", height=440)
+                              "Başarı Sırası", height=440)
             st.plotly_chart(fig, use_container_width=True,
                             key=f"ch_{idx}", config=PLOTLY_CONFIG)
         with col_stats:
