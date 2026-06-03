@@ -328,16 +328,19 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
     program_has_two_lines = "<br>" in wrapped_program
 
     # HTML başlık: üstte vurgulu program adı + altında soluk alt başlık
+    # İki satırlık başlık ile alt başlık arasında nefes alanı için ekstra boşluk
     title_html = (
         f"<span style='font-size:18px; color:{COLOR_TEXT}; font-weight:700;'>"
         f"{wrapped_program}</span>"
         f"<br>"
         f"<span style='font-size:12px; color:{COLOR_AXIS_LABEL}; font-weight:700;'>"
         f"Başarı Sırası</span>"
+        f"<br><span style='font-size:6px;'> </span>"  # başlık-grafik arası nefes alanı
     )
 
-    # Üst margin: program adı 1 satır + alt başlık → ~90; 2 satır + alt başlık → ~115
-    top_margin = 145 if program_has_two_lines else 120
+    # Üst margin: program adı 1 satır + alt başlık → 130; 2 satır + alt başlık → 160
+    # (önceki 90/115 değerleri yetersizdi, başlık X ekseni etiketlerine baskılanıyordu)
+    top_margin = 160 if program_has_two_lines else 130
 
     if not numeric:
         fig.add_annotation(
@@ -346,9 +349,9 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
             showarrow=False, font=dict(size=16, color=COLOR_AXIS_LABEL),
         )
         fig.update_layout(
-            title=dict(text=title_html, x=0.02, y=0.985,
+            title=dict(text=title_html, x=0.02, y=0.97,
                        font=dict(family="Inter, sans-serif", color=COLOR_TEXT)),
-            height=height, margin=dict(l=80, r=50, t=top_margin, b=60),
+            height=height, margin=dict(l=80, r=50, t=top_margin, b=80),
             plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG, showlegend=False,
         )
         return fig
@@ -365,7 +368,6 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
         marker=dict(size=18, color=COLOR_MARKER, line=dict(color="#FFFFFF", width=3)),
         text=labels,
         textposition="top center",
-        cliponaxis=False,
         textfont=dict(size=15, color=COLOR_TEXT, family="Inter, sans-serif"),
         hovertemplate="<b>%{x}</b><br>Başarı Sırası: %{text}<extra></extra>",
         connectgaps=False,
@@ -373,18 +375,19 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
 
     fig.update_layout(
         title=dict(
-            text=title_html, x=0.02, y=0.985,
+            text=title_html, x=0.02, y=0.97,
             font=dict(family="Inter, sans-serif", color=COLOR_TEXT),
         ),
         height=height,
-        margin=dict(l=80, r=50, t=top_margin, b=60),
+        # Üst marj başlık için, alt marj X ekseni yıl etiketleri ve veri etiketleri için artırıldı
+        margin=dict(l=80, r=50, t=top_margin, b=80),
         plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG,
         showlegend=False,
         xaxis=dict(showgrid=False, zeroline=False, showline=False,
                    tickfont=dict(size=14, color=COLOR_AXIS_LABEL),
-                   tickmode="array", tickvals=years, ticktext=[f"<br><br>{y}" for y in years],
-                   ticklabelposition="outside bottom",
-                   tickson="boundaries"),
+                   tickmode="array", tickvals=years, ticktext=years,
+                   ticklen=8,  # Yıl etiketlerini grafikten biraz uzaklaştır
+                   automargin=True),
         # SABİT TICK MODU: 6 çizgi, ters çevrilmiş Y (yukarı = daha iyi sıra)
         yaxis=dict(showgrid=True, gridcolor=COLOR_GRID, griddash="dot",
                    zeroline=False, showline=False,
@@ -393,7 +396,8 @@ def build_chart(years: List[str], values: List[Optional[float]], title: str, hei
                    tickmode="array",
                    tickvals=ticks,
                    ticktext=[fmt_tr(t) for t in ticks],
-                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL)),
+                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL),
+                   automargin=True),
     )
     return fig
 
@@ -423,16 +427,12 @@ def build_comparison_chart(df: pd.DataFrame, school: str, height: int = 700) -> 
         title=dict(text=f"<b>{school} — Tüm Programlar Karşılaştırma</b>",
                    x=0.02, y=0.96, font=dict(size=17, color=COLOR_TEXT)),
         height=height,
-        margin=dict(l=80, r=30, t=110, b=240),
+        margin=dict(l=80, r=30, t=70, b=160),
         plot_bgcolor=COLOR_BG, paper_bgcolor=COLOR_BG,
         legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0,
                     font=dict(size=11, color=COLOR_TEXT)),
         xaxis=dict(showgrid=False, zeroline=False, showline=False,
-                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL),
-                   ticktext=[f"<br><br>{y}" for y in YEAR_COLUMNS],
-                   tickvals=YEAR_COLUMNS,
-                   ticklabelposition="outside bottom",
-                   tickson="boundaries"),
+                   tickfont=dict(size=13, color=COLOR_AXIS_LABEL)),
         yaxis=dict(showgrid=True, gridcolor=COLOR_GRID, griddash="dot",
                    zeroline=False, showline=False, autorange="reversed",
                    tickfont=dict(size=12, color=COLOR_AXIS_LABEL),
@@ -510,9 +510,10 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     ax.spines["bottom"].set_linewidth(2)
 
     # ===========================================================
-    # BAŞLIK - HİYERARŞİK 2 PARÇA
+    # BAŞLIK - HİYERARŞİK 2 PARÇA (fig.text ile sabit konumlanma)
     # ÜST: program adı (büyük, kalın, koyu)
     # ALT: "Başarı Sırası" (küçük, kalın, gri)
+    # Başlık ile grafik arasında garantili boşluk için subplots_adjust kullanılır.
     # ===========================================================
     wrapped_program = wrap_title_two_lines(title, max_chars_per_line=28)
     program_lines = wrapped_program.split("\n")
@@ -527,24 +528,31 @@ def render_chart_png(years: List[str], values: List[Optional[float]],
     else:
         prog_fs = 15
 
-    # Program adı: KALIN, KOYU, BÜYÜK - set_title ile
-    # pad: alt başlığa yer açmak için artırılmış
-    title_pad = 32
-    ax.set_title(wrapped_program, fontsize=prog_fs, fontweight="bold",
-                 color=COLOR_TEXT, loc="left", pad=title_pad)
-
-    # Alt başlık: "Başarı Sırası" - KALIN, GRİ, KÜÇÜK
-    # ax üst kenarının hemen üstüne (program adının altına, Y rakamlarının üstüne)
-    ax.text(0.0, 1.015, "Başarı Sırası",
-            transform=ax.transAxes,
-            fontsize=12, fontweight="bold",
-            color=COLOR_AXIS_LABEL,
-            ha="left", va="bottom")
-
-    # tight_layout sonrası 2 satır program adı varsa üst marjı genişlet
-    plt.tight_layout()
+    # 1) Önce grafiğin üst kenarını AŞAĞIYA çek → başlık + boşluk için yer aç
+    #    2 satır başlık daha fazla yer ister
     if program_line_count == 2:
-        fig.subplots_adjust(top=fig.subplotpars.top - 0.04)
+        top_frac = 0.74   # grafik alanı figürün %74'üne kadar (üstte %26 başlığa)
+    else:
+        top_frac = 0.80   # tek satır başlık (üstte %20 başlığa)
+    # left=0.13: 6 haneli sayılar (örn. "125.000") soldan kırpılmasın diye
+    fig.subplots_adjust(top=top_frac, bottom=0.10, left=0.13, right=0.97)
+
+    # 2) Program adı: figürün üst kısmında, axes hizalı sol
+    #    y konumu top_frac'a göre dinamik (başlık-grafik arası 0.06 boşluk)
+    title_y = top_frac + (0.20 if program_line_count == 2 else 0.13)
+    fig.text(0.13, title_y, wrapped_program,
+             fontsize=prog_fs, fontweight="bold",
+             color=COLOR_TEXT, ha="left", va="top",
+             linespacing=1.15)
+
+    # 3) "Başarı Sırası" alt başlığı: program adının ALTINDA, grafiğin ÜSTÜNDE
+    #    Program adı 1 satır ~0.05 boşluk, 2 satır ~0.10 boşluk gerektirir
+    subtitle_y = top_frac + 0.045
+    fig.text(0.13, subtitle_y, "Başarı Sırası",
+             fontsize=12, fontweight="bold",
+             color=COLOR_AXIS_LABEL, ha="left", va="top")
+
+    # tight_layout KULLANMA - subplots_adjust ile manuel kontrol daha güvenilir
 
     buf = io.BytesIO()
     plt.savefig(buf, format="png", facecolor=COLOR_BG, edgecolor="none", dpi=dpi)
